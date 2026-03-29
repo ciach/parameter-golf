@@ -16,7 +16,7 @@ import subprocess
 import sys
 import time
 import uuid
-import zlib
+import lzma
 from pathlib import Path
 
 import numpy as np
@@ -67,6 +67,9 @@ class Hyperparameters:
     num_heads = int(os.environ.get("NUM_HEADS", 8))
     mlp_mult = int(os.environ.get("MLP_MULT", 2))
     tie_embeddings = bool(int(os.environ.get("TIE_EMBEDDINGS", "1")))
+    leaky_relu = bool(int(os.environ.get("LEAKY_RELU", "0")))
+    unet_skip = bool(int(os.environ.get("UNET_SKIP", "1")))
+    swiglu = bool(int(os.environ.get("SWIGLU", "0")))
     rope_base = float(os.environ.get("ROPE_BASE", 10000.0))
     logit_softcap = float(os.environ.get("LOGIT_SOFTCAP", 30.0))
 
@@ -85,6 +88,7 @@ class Hyperparameters:
     beta2 = float(os.environ.get("BETA2", 0.95))
     adam_eps = float(os.environ.get("ADAM_EPS", 1e-8))
     grad_clip_norm = float(os.environ.get("GRAD_CLIP_NORM", 0.0))
+    ttt_lr = float(os.environ.get("TTT_LR", "0.0"))
 
 # -----------------------------
 # MUON OPTIMIZER 
@@ -246,8 +250,32 @@ def eval_val(
     val_token_count = torch.zeros((), device=device, dtype=torch.float64)
     val_byte_count = torch.zeros((), device=device, dtype=torch.float64)
 
-    model.eval()
-    with torch.inference_mode():
+    if args.ttt_lr == 0.0:
+        model.eval()
+        grad_context = torch.inference_mode()
+    else:
+        model.train()
+        grad_context = torch.enable_grad()
+        # Initialize Legal LoRA TTT exactly matching the 1.1194 Architecture
+        lora_params = []
+        lora_rank = int(os.environ.get("TTT_LORA_RANK", "16"))
+        for module in model.modules():
+            # Injecting LoRA matrices strictly into Q and V projections without breaking standard flow
+            if isinstance(module, CausalSelfAttention):
+                module.c_q.lora_A = nn.Parameter(torch.zeros((module.c_q.in_features, lora_rank), device=device, dtype=torch.bfloat16))
+                module.c_q.lora_B = nn.Parameter(torch.zeros((lora_rank, module.c_q.out_features), device=device, dtype=torch.bfloat16))
+                nn.init.kaiming_uniform_(module.c_q.lora_A, a=math.sqrt(5))
+                
+                module.c_v.lora_A = nn.Parameter(torch.zeros((module.c_v.in_features, lora_rank), device=device, dtype=torch.bfloat16))
+                module.c_v.lora_B = nn.Parameter(torch.zeros((lora_rank, module.c_v.out_features), device=device, dtype=torch.bfloat16))
+                nn.init.kaiming_uniform_(module.c_v.lora_A, a=math.sqrt(5))
+                
+                lora_params.extend([module.c_q.lora_A, module.c_q.lora_B, module.c_v.lora_A, module.c_v.lora_B])
+        
+        # Local Adam optimizer decoupled completely from DDP
+        optimizer_ttt = torch.optim.AdamW(lora_params, lr=args.ttt_lr, weight_decay=0.0)
+
+    with grad_context:
         for batch_seq_start in range(seq_start, seq_end, local_batch_seqs):
             batch_seq_end = min(batch_seq_start + local_batch_seqs, seq_end)
             raw_start = batch_seq_start * args.train_seq_len
@@ -256,15 +284,24 @@ def eval_val(
             x = local[:-1].reshape(-1, args.train_seq_len)
             y = local[1:].reshape(-1, args.train_seq_len)
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=True):
-                batch_loss = model(x, y).detach()
+                batch_loss = model(x, y)
+                if args.ttt_lr == 0.0:
+                    batch_loss = batch_loss.detach()
+                    
             batch_token_count = float(y.numel())
-            val_loss_sum += batch_loss.to(torch.float64) * batch_token_count
+            val_loss_sum += batch_loss.detach().to(torch.float64) * batch_token_count
             val_token_count += batch_token_count
             prev_ids = x.reshape(-1)
             tgt_ids = y.reshape(-1)
             token_bytes = base_bytes_lut[tgt_ids].to(dtype=torch.int16)
             token_bytes += (has_leading_space_lut[tgt_ids] & ~is_boundary_token_lut[prev_ids]).to(dtype=torch.int16)
             val_byte_count += token_bytes.to(torch.float64).sum()
+            
+            # Execute Legal Score-First LoRA TTT
+            if args.ttt_lr > 0.0:
+                optimizer_ttt.zero_grad()
+                batch_loss.backward()
+                optimizer_ttt.step()
 
     if dist.is_available() and dist.is_initialized():
         dist.all_reduce(val_loss_sum, op=dist.ReduceOp.SUM)
@@ -275,6 +312,18 @@ def eval_val(
     bits_per_token = val_loss.item() / math.log(2.0)
     tokens_per_byte = val_token_count.item() / val_byte_count.item()
     model.train()
+    
+    # Strip LoRA hooks post-evaluation to prevent memory leaks in loop structures
+    if args.ttt_lr > 0.0:
+        for module in model.modules():
+            if isinstance(module, CausalSelfAttention):
+                if hasattr(module.c_q, 'lora_A'):
+                    del module.c_q.lora_A
+                    del module.c_q.lora_B
+                if hasattr(module.c_v, 'lora_A'):
+                    del module.c_v.lora_A
+                    del module.c_v.lora_B
+
     return float(val_loss.item()), float(bits_per_token * tokens_per_byte)
 
 # -----------------------------
@@ -510,7 +559,10 @@ class CastedLinear(nn.Linear):
     # Keep weights in fp32 for optimizer/state quality, cast at matmul time for bf16 compute.
     def forward(self, x: Tensor) -> Tensor:
         bias = self.bias.to(x.dtype) if self.bias is not None else None
-        return F.linear(x, self.weight.to(x.dtype), bias)
+        base = F.linear(x, self.weight.to(x.dtype), bias)
+        if hasattr(self, 'lora_A') and hasattr(self, 'lora_B'):
+            base = base + (x @ self.lora_A.to(x.dtype)) @ self.lora_B.to(x.dtype)
+        return base
 
 
 def restore_low_dim_params_to_fp32(module: nn.Module) -> None:
@@ -604,17 +656,27 @@ class CausalSelfAttention(nn.Module):
 
 
 class MLP(nn.Module):
-    # relu^2 MLP from the original modded-nanogpt setup
-    def __init__(self, dim: int, mlp_mult: int):
+    # relu^2 / leaky_relu^2 / swiglu MLP
+    def __init__(self, dim: int, mlp_mult: int, leaky_relu: bool, swiglu: bool):
         super().__init__()
+        self.leaky_relu = leaky_relu
+        self.swiglu = swiglu
         hidden = mlp_mult * dim
         self.fc = CastedLinear(dim, hidden, bias=False)
+        if self.swiglu:
+            self.fc_gate = CastedLinear(dim, hidden, bias=False)
         self.proj = CastedLinear(hidden, dim, bias=False)
         self.proj._zero_init = True
 
     def forward(self, x: Tensor) -> Tensor:
-        x = torch.relu(self.fc(x))
-        return self.proj(x.square())
+        if self.swiglu:
+            gate = F.silu(self.fc_gate(x))
+            x = self.fc(x) * gate
+            return self.proj(x)
+        else:
+            x = self.fc(x)
+            x = F.leaky_relu(x, negative_slope=0.1) if self.leaky_relu else torch.relu(x)
+            return self.proj(x.square())
 
 
 class Block(nn.Module):
@@ -626,12 +688,14 @@ class Block(nn.Module):
         mlp_mult: int,
         rope_base: float,
         qk_gain_init: float,
+        leaky_relu: bool,
+        swiglu: bool,
     ):
         super().__init__()
         self.attn_norm = RMSNorm()
         self.mlp_norm = RMSNorm()
         self.attn = CausalSelfAttention(dim, num_heads, num_kv_heads, rope_base, qk_gain_init)
-        self.mlp = MLP(dim, mlp_mult)
+        self.mlp = MLP(dim, mlp_mult, leaky_relu, swiglu)
         self.attn_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.mlp_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.resid_mix = nn.Parameter(torch.stack((torch.ones(dim), torch.zeros(dim))).float())
@@ -659,6 +723,9 @@ class GPT(nn.Module):
         logit_softcap: float,
         rope_base: float,
         qk_gain_init: float,
+        leaky_relu: bool = False,
+        unet_skip: bool = True,
+        swiglu: bool = False,
     ):
         super().__init__()
         if logit_softcap <= 0.0:
@@ -667,10 +734,17 @@ class GPT(nn.Module):
         self.tied_embed_init_std = tied_embed_init_std
         self.logit_softcap = logit_softcap
         self.tok_emb = nn.Embedding(vocab_size, model_dim)
-        self.num_encoder_layers = num_layers // 2
-        self.num_decoder_layers = num_layers - self.num_encoder_layers
-        self.num_skip_weights = min(self.num_encoder_layers, self.num_decoder_layers)
-        self.skip_weights = nn.Parameter(torch.ones(self.num_skip_weights, model_dim, dtype=torch.float32))
+        self.unet_skip = unet_skip
+
+        if self.unet_skip:
+            self.num_encoder_layers = num_layers // 2
+            self.num_decoder_layers = num_layers - self.num_encoder_layers
+            self.num_skip_weights = min(self.num_encoder_layers, self.num_decoder_layers)
+            self.skip_weights = nn.Parameter(torch.ones(self.num_skip_weights, model_dim, dtype=torch.float32))
+        else:
+            self.num_encoder_layers = num_layers
+            self.num_decoder_layers = 0
+
         self.blocks = nn.ModuleList(
             [
                 Block(
@@ -680,6 +754,8 @@ class GPT(nn.Module):
                     mlp_mult,
                     rope_base,
                     qk_gain_init,
+                    leaky_relu,
+                    swiglu,
                 )
                 for i in range(num_layers)
             ]
@@ -703,14 +779,18 @@ class GPT(nn.Module):
         x0 = x
         skips: list[Tensor] = []
 
-        # First half stores skips; second half reuses them in reverse order.
-        for i in range(self.num_encoder_layers):
-            x = self.blocks[i](x, x0)
-            skips.append(x)
-        for i in range(self.num_decoder_layers):
-            if skips:
-                x = x + self.skip_weights[i].to(dtype=x.dtype)[None, None, :] * skips.pop()
-            x = self.blocks[self.num_encoder_layers + i](x, x0)
+        if self.unet_skip:
+            # First half stores skips; second half reuses them in reverse order.
+            for i in range(self.num_encoder_layers):
+                x = self.blocks[i](x, x0)
+                skips.append(x)
+            for i in range(self.num_decoder_layers):
+                if skips:
+                    x = x + self.skip_weights[i].to(dtype=x.dtype)[None, None, :] * skips.pop()
+                x = self.blocks[self.num_encoder_layers + i](x, x0)
+        else:
+            for i in range(self.num_encoder_layers):
+                x = self.blocks[i](x, x0)
 
         x = self.final_norm(x).reshape(-1, x.size(-1))
         targets = target_ids.reshape(-1)
@@ -835,6 +915,9 @@ def main() -> None:
         logit_softcap=args.logit_softcap,
         rope_base=args.rope_base,
         qk_gain_init=args.qk_gain_init,
+        leaky_relu=args.leaky_relu,
+        unet_skip=args.unet_skip,
+        swiglu=args.swiglu,
     ).to(device).bfloat16()
     for module in base_model.modules():
         if isinstance(module, CastedLinear):
@@ -1077,7 +1160,7 @@ def main() -> None:
     quant_buf = io.BytesIO()
     torch.save(quant_obj, quant_buf)
     quant_raw = quant_buf.getvalue()
-    quant_blob = zlib.compress(quant_raw, level=9)
+    quant_blob = lzma.compress(quant_raw, preset=9)
     quant_raw_bytes = len(quant_raw)
     if master_process:
         with open("final_model.int8.ptz", "wb") as f:
@@ -1095,7 +1178,7 @@ def main() -> None:
         dist.barrier()
     with open("final_model.int8.ptz", "rb") as f:
         quant_blob_disk = f.read()
-    quant_state = torch.load(io.BytesIO(zlib.decompress(quant_blob_disk)), map_location="cpu")
+    quant_state = torch.load(io.BytesIO(lzma.decompress(quant_blob_disk)), map_location="cpu")
     base_model.load_state_dict(dequantize_state_dict_int8(quant_state), strict=True)
     torch.cuda.synchronize()
     t_qeval = time.perf_counter()

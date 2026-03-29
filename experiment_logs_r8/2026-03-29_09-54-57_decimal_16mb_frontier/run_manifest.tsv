@@ -1,0 +1,4 @@
+run_id	script	description	log_file	env
+00_frontier_repeat_decimal_cap	train_gpt_frontier.py	Repeat the current best frontier reproduction and score it against the true decimal 16MB cap	experiment_logs_r8/2026-03-29_09-54-57_decimal_16mb_frontier/log_00_frontier_repeat_decimal_cap.txt	SUBMISSION_SIZE_CAP_BYTES=16000000 EVAL_STRIDE=64
+01_frontier_mlp_mult_2p75	train_gpt_frontier.py	Discovery: shrink the dominant MLP block while keeping the rest of the frontier stack unchanged	experiment_logs_r8/2026-03-29_09-54-57_decimal_16mb_frontier/log_01_frontier_mlp_mult_2p75.txt	SUBMISSION_SIZE_CAP_BYTES=16000000 EVAL_STRIDE=64 MLP_MULT=2.75
+02_frontier_10_layers	train_gpt_frontier.py	Discovery: remove one layer as a clean size-focused architecture trim	experiment_logs_r8/2026-03-29_09-54-57_decimal_16mb_frontier/log_02_frontier_10_layers.txt	SUBMISSION_SIZE_CAP_BYTES=16000000 EVAL_STRIDE=64 NUM_LAYERS=10

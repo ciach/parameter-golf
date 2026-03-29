@@ -1,0 +1,5 @@
+Run ID                         | Final BPB    | Total Bytes | Cap    | Log File
+----------------------------------------------------------------------------------------------------
+00_cap_anchor_mlp2p75_bg1024   | FAILED (exit:1) | UNKNOWN     | N/A    | experiment_logs_r9/2026-03-29_12-04-08_cap_first_int6_embed/log_00_cap_anchor_mlp2p75_bg1024.txt
+01_quality_step_mlp2p875_bg1024 | FAILED (exit:1) | UNKNOWN     | N/A    | experiment_logs_r9/2026-03-29_12-04-08_cap_first_int6_embed/log_01_quality_step_mlp2p875_bg1024.txt
+02_quality_push_mlp2p875_bg1536 | FAILED (exit:1) | UNKNOWN     | N/A    | experiment_logs_r9/2026-03-29_12-04-08_cap_first_int6_embed/log_02_quality_push_mlp2p875_bg1536.txt

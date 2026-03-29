@@ -1,0 +1,5 @@
+run_id	script	description	log_file	env
+00_record_repeat_r4_baseline	train_gpt.py	Repeat the 1.1529 Round 4 winner and capture the log for records	experiment_logs_r7/2026-03-29_08-51-43_record_plus_frontier/log_00_record_repeat_r4_baseline.txt	NUM_LAYERS=6 MODEL_DIM=768 NUM_HEADS=12 NUM_KV_HEADS=6 TRAIN_SEQ_LEN=4096 TRAIN_BATCH_TOKENS=524288 GRAD_CLIP_NORM=1.0 SCALAR_LR=0.02 MLP_MULT=4 QK_GAIN_INIT=2.0 LEAKY_RELU=1
+01_frontier_reproduction	train_gpt_frontier.py	Frontier reproduction baseline from the Round 6 plan	experiment_logs_r7/2026-03-29_08-51-43_record_plus_frontier/log_01_frontier_reproduction.txt	EVAL_STRIDE=64
+02_frontier_leaky_relu2	train_gpt_frontier.py	Swap frontier relu^2 for LeakyReLU(0.5)^2	experiment_logs_r7/2026-03-29_08-51-43_record_plus_frontier/log_02_frontier_leaky_relu2.txt	EVAL_STRIDE=64 LEAKY_RELU=1 LEAKY_RELU_SLOPE=0.5
+03_frontier_seq4096	train_gpt_frontier.py	Test longer-context frontier training/eval at sequence length 4096	experiment_logs_r7/2026-03-29_08-51-43_record_plus_frontier/log_03_frontier_seq4096.txt	EVAL_STRIDE=64 TRAIN_SEQ_LEN=4096 EVAL_SEQ_LEN=4096

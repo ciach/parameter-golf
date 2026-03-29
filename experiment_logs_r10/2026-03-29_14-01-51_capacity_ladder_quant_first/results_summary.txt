@@ -1,0 +1,7 @@
+Run ID                             | Final BPB    | Total Bytes | Cap    | Log File
+--------------------------------------------------------------------------------------------------------
+00_quant_quality_tweak_mlp3_bg2048_no_embed_int6 | 1.12276383   | 15561740    | PASS   | experiment_logs_r10/2026-03-29_14-01-51_capacity_ladder_quant_first/log_00_quant_quality_tweak_mlp3_bg2048_no_embed_int6.txt
+01_repeat_best_mlp2p875_bg1536     | 1.12818295   | 15674188    | PASS   | experiment_logs_r10/2026-03-29_14-01-51_capacity_ladder_quant_first/log_01_repeat_best_mlp2p875_bg1536.txt
+02_capacity_up_mlp3_bg1536         | 1.12663410   | 15282007    | PASS   | experiment_logs_r10/2026-03-29_14-01-51_capacity_ladder_quant_first/log_02_capacity_up_mlp3_bg1536.txt
+03_capacity_up_plus_mlp3_bg2048    | 1.12455883   | 15754388    | PASS   | experiment_logs_r10/2026-03-29_14-01-51_capacity_ladder_quant_first/log_03_capacity_up_plus_mlp3_bg2048.txt
+04_no_size_arch_tweak_mlp3_bg2048_ve_8_9_10 | 1.12549073   | 15470214    | PASS   | experiment_logs_r10/2026-03-29_14-01-51_capacity_ladder_quant_first/log_04_no_size_arch_tweak_mlp3_bg2048_ve_8_9_10.txt

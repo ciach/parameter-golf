@@ -1,0 +1,5 @@
+Run ID                         | Final BPB    | Total Bytes | Cap    | Log File
+----------------------------------------------------------------------------------------------------
+00_frontier_repeat_decimal_cap | 1.12376732   | 17056319    | FAIL   | experiment_logs_r8/2026-03-29_09-54-57_decimal_16mb_frontier/log_00_frontier_repeat_decimal_cap.txt
+01_frontier_mlp_mult_2p75      | 1.12787810   | 16266009    | FAIL   | experiment_logs_r8/2026-03-29_09-54-57_decimal_16mb_frontier/log_01_frontier_mlp_mult_2p75.txt
+02_frontier_10_layers          | FAILED (exit:1) | UNKNOWN     | N/A    | experiment_logs_r8/2026-03-29_09-54-57_decimal_16mb_frontier/log_02_frontier_10_layers.txt

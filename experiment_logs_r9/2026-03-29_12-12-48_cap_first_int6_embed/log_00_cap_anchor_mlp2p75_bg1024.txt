@@ -1,0 +1,81 @@
+W0329 12:12:50.313000 2513 torch/distributed/run.py:803] 
+W0329 12:12:50.313000 2513 torch/distributed/run.py:803] *****************************************
+W0329 12:12:50.313000 2513 torch/distributed/run.py:803] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0329 12:12:50.313000 2513 torch/distributed/run.py:803] *****************************************
+logs/00_cap_anchor_mlp2p75_bg1024.txt
+val_bpb:enabled tokenizer_kind=sentencepiece tokenizer_path=./data/tokenizers/fineweb_1024_bpe.model
+train_loader:dataset:fineweb10B_sp1024 train_shards:80
+val_loader:shards pattern=./data/datasets/fineweb10B_sp1024/fineweb_val_*.bin tokens:62021632
+model_params:25420892
+mtp_num_heads:0 mtp_loss_weight:0.2 mtp_params:0
+XSA:last_4 active_layers:[7, 8, 9, 10]
+world_size:8 grad_accum_steps:1
+sdp_backends:cudnn=False flash=True mem_efficient=False math=False
+attention_mode:gqa num_heads:8 num_kv_heads:4
+tie_embeddings:True embed_lr:0.035 head_lr:0.0 matrix_lr:0.025 scalar_lr:0.025
+activation:relu2 leaky_relu_slope:0.500
+submission_size_cap_bytes:16000000 mixed_quant_keep_float_max_numel:16384 mixed_quant_int6_cats:mlp,attn,embed int6_pack:True
+train_batch_tokens:786432 train_seq_len:2048 iterations:20000 warmup_steps:20 max_wallclock_seconds:600.000
+seed:1337
+warmup_step:1/20
+warmup_step:2/20
+warmup_step:3/20
+warmup_step:4/20
+warmup_step:5/20
+warmup_step:6/20
+warmup_step:7/20
+warmup_step:8/20
+warmup_step:9/20
+warmup_step:10/20
+warmup_step:11/20
+warmup_step:12/20
+warmup_step:13/20
+warmup_step:14/20
+warmup_step:15/20
+warmup_step:16/20
+warmup_step:17/20
+warmup_step:18/20
+warmup_step:19/20
+warmup_step:20/20
+step:0/20000 val_loss:6.9301 val_bpb:4.1044 train_time:0ms step_avg:0.01ms
+step:1/20000 train_loss:6.9321 train_time:133ms step_avg:133.43ms
+step:2/20000 train_loss:8.6478 train_time:215ms step_avg:107.63ms
+step:3/20000 train_loss:7.8393 train_time:302ms step_avg:100.60ms
+step:4/20000 train_loss:7.1866 train_time:389ms step_avg:97.20ms
+step:5/20000 train_loss:6.9947 train_time:476ms step_avg:95.14ms
+step:6/20000 train_loss:6.8688 train_time:563ms step_avg:93.77ms
+step:7/20000 train_loss:6.7640 train_time:649ms step_avg:92.66ms
+step:8/20000 train_loss:6.6860 train_time:736ms step_avg:91.96ms
+step:9/20000 train_loss:6.3974 train_time:822ms step_avg:91.33ms
+step:10/20000 train_loss:6.0352 train_time:909ms step_avg:90.86ms
+step:500/20000 train_loss:2.4100 train_time:46261ms step_avg:92.52ms
+step:1000/20000 train_loss:2.2819 train_time:94256ms step_avg:94.26ms
+step:1500/20000 train_loss:2.2275 train_time:142100ms step_avg:94.73ms
+step:2000/20000 train_loss:2.0676 train_time:189726ms step_avg:94.86ms
+step:2500/20000 train_loss:2.1692 train_time:237276ms step_avg:94.91ms
+step:3000/20000 train_loss:2.1647 train_time:284916ms step_avg:94.97ms
+step:3500/20000 train_loss:2.1650 train_time:332366ms step_avg:94.96ms
+step:4000/20000 train_loss:1.9570 train_time:379860ms step_avg:94.96ms
+step:4000/20000 val_loss:2.0503 val_bpb:1.2143 train_time:379871ms step_avg:94.97ms
+step:4500/20000 train_loss:2.1050 train_time:427161ms step_avg:94.92ms
+step:5000/20000 train_loss:2.0868 train_time:474390ms step_avg:94.88ms
+step:5500/20000 train_loss:1.9970 train_time:522090ms step_avg:94.93ms
+swa:start step:5650
+late_qat:enabled step:5801 scale:0.1498
+step:6000/20000 train_loss:1.9164 train_time:570088ms step_avg:95.01ms
+step:6322/20000 val_loss:1.9418 val_bpb:1.1501 train_time:600004ms step_avg:94.91ms
+stopping_early: wallclock_cap train_time:600004ms step:6322/20000
+peak memory allocated: 20128 MiB reserved: 20354 MiB
+ema:applying EMA weights
+DIAGNOSTIC post_ema val_loss:1.9402 val_bpb:1.1491 eval_time:1902ms
+Serialized model: 100149257 bytes
+Code size: 72421 bytes
+Serialized model int6+zstd: 17036446 bytes
+Total submission size int6+zstd: 17108867 bytes
+Total submission size int8+zlib: 17108867 bytes
+Submission cap check: FAIL cap:16000000 total:17108867 margin:-1108867
+final_int6_roundtrip val_loss:1.9570 val_bpb:1.1591 eval_time:34093ms
+final_int6_roundtrip_exact val_loss:1.95701823 val_bpb:1.15905643
+final_int6_sliding_window val_loss:1.9167 val_bpb:1.1352 stride:64 eval_time:88530ms
+final_int6_sliding_window_exact val_loss:1.91672999 val_bpb:1.13519847
+final_int8_zlib_roundtrip_exact val_loss:1.91672999 val_bpb:1.13519847
