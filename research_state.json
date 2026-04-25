@@ -1,22 +1,20 @@
 {
   "current_best": {
-    "archive": "remote_logs/2026-04-11_r14_A_bigram3072_fa3.tar.gz",
-    "bpb": 1.12271606,
-    "bytes": 15779212,
+    "archive": "remote_logs/2026-04-25_r39a_upstream1060_sp1024_fullgptq_fa3.tar.gz",
+    "bpb": 1.11184868,
+    "bytes": 15965031,
     "cap": 16000000,
     "env": {
-      "BIGRAM_VOCAB_SIZE": "3072",
-      "INT6_PACK": "0",
-      "MIXED_QUANT_INT4_CATS": "",
-      "MIXED_QUANT_INT6_CATS": "mlp,attn",
-      "MIXED_QUANT_KEEP_FLOAT_MAX_NUMEL": "24576",
-      "MLP_MULT": "3.0",
+      "BIGRAM_DIM": "112",
+      "BIGRAM_VOCAB_SIZE": "2816",
+      "EVAL_STRIDE": "64",
+      "GPTQ_RESERVE_MS": "14000",
       "TTT_ENABLED": "0",
-      "VE_DIM": "128",
-      "VE_LAYERS": "9,10"
+      "USE_GPTQ": "1",
+      "XSA_LAST_N": "11"
     },
-    "margin": 220788,
-    "run_id": "2026-04-11_r14_A_bigram3072_fa3"
+    "margin": 34969,
+    "run_id": "2026-04-25_r39a_upstream1060_sp1024_fullgptq_fa3"
   },
   "denylist": [
     {
@@ -274,16 +272,24 @@
       "bytes": 15788173,
       "decision": "reject",
       "run_id": "2026-04-25_r38a_act_ranked_int4_mlp1_fa3"
+    },
+    {
+      "archive": "remote_logs/2026-04-25_r39a_upstream1060_sp1024_fullgptq_fa3.tar.gz",
+      "bpb": 1.11184868,
+      "bytes": 15965031,
+      "decision": "pass",
+      "run_id": "2026-04-25_r39a_upstream1060_sp1024_fullgptq_fa3"
     }
   ],
   "next_strategy": {
     "priority": [
-      "Run R39A: reproduce upstream PR #1060 stack on SP1024 with coprime loader + XSA-all + Full Hessian GPTQ + BigramHash(2816x112), no TTT.",
-      "If R39A reproduces near 1.1122 BPB, switch future work to the upstream1060/Scylla line rather than local R14 quant tweaks.",
-      "After R39A, decide whether to retokenize Scylla data for the 0.9485 record path or port Scylla tokenizer metadata first."
+      "Run R40A: R39A + score-first LegalTTT 4 epochs from PR #1812; parser now gates on legal_ttt_exact BPB.",
+      "Run R40B: R39A + QK_GAIN_INIT=5.25 without TTT, isolating the QK-gain signal from Scylla/SP8192 records.",
+      "Run R40C: QK_GAIN_INIT=5.25 + LegalTTT 4 epochs after R40A/R40B complete.",
+      "Parallel follow-up: prepare Scylla tokenizer/data and inspect PR #1813 train_gpt.py for a direct 0.94166 reproduction path."
     ],
-    "reason": "Fetched upstream/main and found newer merged records: Scylla + Full GPTQ + XSA-all at 0.9485 BPB and the SP1024 PR #1060 stack at 1.1122 BPB. The SP1024 stack is immediately runnable on our existing data and is a much stronger base than R14.",
-    "source": "2026-04-25 upstream/main analysis"
+    "reason": "R39A reproduced upstream #1060 at 1.11184868 BPB and 15,965,031 bytes, so the old R14/R37 branch is retired. Immediate progress is to test recent score-first LegalTTT and QK-Gain 5.25 on this runnable parent while separately preparing the Scylla/SP8192 data/code path.",
+    "source": "2026-04-25 R39A reproduction plus open PR scan (#1813, #1812, #1797, #1732)"
   },
   "paper_lantern": {
     "accepted_families": [
@@ -358,7 +364,10 @@
     "2026-04-25_r37a_awq_act_eq_a025_fa3",
     "2026-04-25_r37b_awq_act_eq_a0125_fa3",
     "2026-04-25_r38a_act_ranked_int4_mlp1_fa3",
-    "2026-04-25_r39a_upstream1060_sp1024_fullgptq_fa3"
+    "2026-04-25_r39a_upstream1060_sp1024_fullgptq_fa3",
+    "2026-04-25_r40a_upstream1060_legalttt4ep_fa3",
+    "2026-04-25_r40b_upstream1060_qk525_no_ttt_fa3",
+    "2026-04-25_r40c_upstream1060_qk525_legalttt4ep_fa3"
   ],
   "schema_version": 1,
   "updated": "2026-04-25"

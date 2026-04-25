@@ -53,6 +53,13 @@ def parse_text(text: str, source: str = "") -> dict[str, Any]:
     run_id = _last_str(r"^batch:([^\s]+)$", text)
     if run_id is None:
         run_id = _last_str(r"logs/([^/\s]+)\.txt", text)
+    base_sliding_exact_bpb = _last_float(
+        r"final_int6_sliding_window_exact val_loss:[0-9.]+ val_bpb:([0-9.]+)",
+        text,
+    )
+    legal_ttt_exact_bpb = _last_float(r"legal_ttt_exact val_loss:[0-9.]+ val_bpb:([0-9.]+)", text)
+    base_eval_time_ms = _last_int(r"final_int6_sliding_window .*?eval_time:(\d+)ms", text)
+    legal_ttt_eval_time_ms = _last_int(r"legal_ttt .*?eval_time:(\d+)ms", text)
     result: dict[str, Any] = {
         "source": source,
         "run_id": run_id,
@@ -76,12 +83,16 @@ def parse_text(text: str, source: str = "") -> dict[str, Any]:
         "step_avg_ms": _last_float(r"step:\d+/\d+ .*?step_avg:([0-9.]+)ms", text),
         "post_ema_bpb": _last_float(r"DIAGNOSTIC post_ema val_loss:[0-9.]+ val_bpb:([0-9.]+)", text),
         "roundtrip_exact_bpb": _last_float(r"final_int6_roundtrip_exact val_loss:[0-9.]+ val_bpb:([0-9.]+)", text),
-        "sliding_exact_bpb": _last_float(r"final_int6_sliding_window_exact val_loss:[0-9.]+ val_bpb:([0-9.]+)", text),
+        "base_sliding_exact_bpb": base_sliding_exact_bpb,
+        "legal_ttt_exact_bpb": legal_ttt_exact_bpb,
+        "sliding_exact_bpb": legal_ttt_exact_bpb if legal_ttt_exact_bpb is not None else base_sliding_exact_bpb,
         "int8_exact_bpb": _last_float(r"final_int8_zlib_roundtrip_exact val_loss:[0-9.]+ val_bpb:([0-9.]+)", text),
         "total_bytes": _last_int(r"Total submission size int[68]\+[a-z0-9]+: (\d+) bytes", text),
         "cap_status": _last_str(r"Submission cap check: (PASS|FAIL)", text),
         "cap_margin": _last_int(r"Submission cap check: (?:PASS|FAIL) cap:\d+ total:\d+ margin:([+-]?\d+)", text),
-        "eval_time_ms": _last_int(r"final_int6_sliding_window .*?eval_time:(\d+)ms", text),
+        "base_eval_time_ms": base_eval_time_ms,
+        "legal_ttt_eval_time_ms": legal_ttt_eval_time_ms,
+        "eval_time_ms": legal_ttt_eval_time_ms if legal_ttt_eval_time_ms is not None else base_eval_time_ms,
         "quant_codec": _last_str(r"quant_codec_selected:([^\s]+)", text),
     }
     codec_line = _last_str(r"quant_codec_sizes:([^\n]+)", text)
