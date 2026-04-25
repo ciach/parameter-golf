@@ -143,7 +143,7 @@ def make_remote_script(exp: dict[str, Any], defaults: dict[str, Any]) -> str:
     log_name = "log_" + exp_id + ".txt"
     grep_re = (
         "flash_attention_backend|VE:|TTT|ttt_|mixed_quant|step:[0-9]+/|late_qat|"
-        "warmdown_iters|ema_decay|matrix_lr_layer_mults|cache_mode|factorized_emb_dim|outlier_audit|matformer_|mlp_eq_|spectral_mode|spectral_layers|gptq|legal_ttt|stopping_early|DIAGNOSTIC post_ema|quant_codec_selected|Total submission|"
+        "warmdown_iters|ema_decay|matrix_lr_layer_mults|cache_mode|factorized_emb_dim|outlier_audit|matformer_|mlp_eq_|spectral_mode|spectral_layers|depth_recur|gptq|legal_ttt|stopping_early|DIAGNOSTIC post_ema|quant_codec_selected|Total submission|"
         "Submission cap|final_int6|final_int8|Traceback|RuntimeError|ValueError|SignalException"
     )
     env_text = " ".join(f"{key}={shlex.quote(value)}" for key, value in env.items())

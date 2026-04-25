@@ -1,8 +1,8 @@
 {
   "current_best": {
-    "archive": "remote_logs/2026-04-25_r40b_upstream1060_qk525_no_ttt_fa3.tar.gz",
-    "bpb": 1.11157588,
-    "bytes": 15969115,
+    "archive": "remote_logs/2026-04-25_r40c_upstream1060_qk525_legalttt4ep_fa3.tar.gz",
+    "bpb": 1.11154288,
+    "bytes": 15967467,
     "cap": 16000000,
     "env": {
       "BIGRAM_DIM": "112",
@@ -10,12 +10,18 @@
       "EVAL_STRIDE": "64",
       "GPTQ_RESERVE_MS": "14000",
       "QK_GAIN_INIT": "5.25",
-      "TTT_ENABLED": "0",
+      "TTT_BATCH_SEQS": "32",
+      "TTT_CHUNK_TOKENS": "32768",
+      "TTT_ENABLED": "1",
+      "TTT_EPOCHS": "4",
+      "TTT_FREEZE_BLOCKS": "2",
+      "TTT_GRAD_CLIP": "1.0",
+      "TTT_LR": "0.002",
       "USE_GPTQ": "1",
       "XSA_LAST_N": "11"
     },
-    "margin": 30885,
-    "run_id": "2026-04-25_r40b_upstream1060_qk525_no_ttt_fa3"
+    "margin": 32533,
+    "run_id": "2026-04-25_r40c_upstream1060_qk525_legalttt4ep_fa3"
   },
   "denylist": [
     {
@@ -294,16 +300,24 @@
       "bytes": 15969115,
       "decision": "pass",
       "run_id": "2026-04-25_r40b_upstream1060_qk525_no_ttt_fa3"
+    },
+    {
+      "archive": "remote_logs/2026-04-25_r40c_upstream1060_qk525_legalttt4ep_fa3.tar.gz",
+      "bpb": 1.11154288,
+      "bytes": 15967467,
+      "decision": "pass",
+      "run_id": "2026-04-25_r40c_upstream1060_qk525_legalttt4ep_fa3"
     }
   ],
   "next_strategy": {
     "priority": [
-      "Run R40C only as a strict interaction test: QK_GAIN_INIT=5.25 + LegalTTT 4ep must beat 1.11157588 BPB.",
-      "If R40C rejects, stop TTT on the SP1024 #1060 line and move to a targeted QK-gain neighbor or Scylla data prep.",
+      "R40C passed narrowly: QK_GAIN_INIT=5.25 + LegalTTT 4ep reached 1.11154288 BPB, beating R40B by 0.00003300 BPB.",
+      "Treat LegalTTT as a narrow scoring add-on on this SP1024 path; its pre-TTT score was stronger at 1.11146475, but the submitted legal TTT score is the official gate result.",
+      "Next progress branch should be QK-gain neighbor or weight-tied depth recurrence, not old R14/R37 micro-tweaks.",
       "Prepare Scylla tokenizer/data and inspect PR #1813 train_gpt.py for the direct 0.94166 path."
     ],
-    "reason": "QK_GAIN_INIT=5.25 transferred from the recent Scylla/SP8192 records to the upstream #1060 SP1024 parent, improving from 1.11184868 to 1.11157588 BPB. LegalTTT 4ep harmed the non-QK parent, so any combined TTT run must beat R40B directly or the TTT path should be dropped.",
-    "source": "2026-04-25 R40B QK-Gain transfer result"
+    "reason": "QK_GAIN_INIT=5.25 transferred from the recent Scylla/SP8192 records to the upstream #1060 SP1024 parent, improving from 1.11184868 to 1.11157588 BPB. Combining it with score-first LegalTTT 4ep produced a small official gain to 1.11154288 BPB, while the pre-TTT model itself scored 1.11146475 BPB.",
+    "source": "2026-04-25 R40C QK-Gain + LegalTTT result"
   },
   "paper_lantern": {
     "accepted_families": [

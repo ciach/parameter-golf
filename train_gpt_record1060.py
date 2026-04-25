@@ -69,6 +69,8 @@ class Hyperparameters:
     bigram_vocab_size = int(os.environ.get("BIGRAM_VOCAB_SIZE", 2048))
     bigram_dim = int(os.environ.get("BIGRAM_DIM", 128))
     xsa_last_n = int(os.environ.get("XSA_LAST_N", 4))
+    depth_recur_layers = os.environ.get("DEPTH_RECUR_LAYERS", "")
+    depth_recur_repeats = int(os.environ.get("DEPTH_RECUR_REPEATS", 0))
     rope_dims = int(os.environ.get("ROPE_DIMS", 16))
     ln_scale = bool(int(os.environ.get("LN_SCALE", "1")))
     ve_enabled = bool(int(os.environ.get("VE_ENABLED", "1")))
@@ -875,6 +877,8 @@ class GPT(nn.Module):
         bigram_vocab_size: int = 0,
         bigram_dim: int = 128,
         xsa_last_n: int = 0,
+        depth_recur_layers: str = "",
+        depth_recur_repeats: int = 0,
         rope_dims: int = 0,
         ln_scale: bool = False,
         ve_enabled: bool = False,
@@ -895,6 +899,10 @@ class GPT(nn.Module):
         self.num_encoder_layers = num_layers // 2
         self.num_decoder_layers = num_layers - self.num_encoder_layers
         self.num_skip_weights = min(self.num_encoder_layers, self.num_decoder_layers)
+        self.depth_recur_layers = {
+            int(x) for x in depth_recur_layers.split(",") if x.strip()
+        }
+        self.depth_recur_repeats = max(0, depth_recur_repeats)
         self.skip_weights = nn.Parameter(torch.ones(self.num_skip_weights, model_dim, dtype=torch.float32))
         # Parameter banks: contiguous 3D tensors for batched optimizer
         head_dim = model_dim // num_heads
@@ -977,8 +985,19 @@ class GPT(nn.Module):
         ve_base = ve_cache['ve'] if ve_cache is not None else self.ve_shared(input_ids)
         ve_idx = self.ve_layer_indices.index(layer_idx)
         return ve_base * self.ve_layer_scales[ve_idx].to(dtype=ve_base.dtype)
-    def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
+    def _run_block(self, layer_idx: int, x: Tensor, x0: Tensor, input_ids: Tensor, ve_cache: dict) -> Tensor:
         n = self.num_layers
+        ve = self._get_ve(layer_idx, input_ids, ve_cache)
+        repeats = 1 + (self.depth_recur_repeats if layer_idx in self.depth_recur_layers else 0)
+        for _ in range(repeats):
+            x = self.blocks[layer_idx](
+                x, x0,
+                self.qo_bank[layer_idx], self.kv_bank[layer_idx], self.kv_bank[n + layer_idx],
+                self.qo_bank[n + layer_idx], self.mlp_up_bank[layer_idx], self.mlp_down_bank[layer_idx],
+                v_embed=ve,
+            )
+        return x
+    def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
         x = self.tok_emb(input_ids)
         if self.bigram is not None:
             x = x + self.bigram(input_ids)
@@ -988,21 +1007,13 @@ class GPT(nn.Module):
         skips: list[Tensor] = []
         ve_cache: dict = {}
         for i in range(self.num_encoder_layers):
-            ve = self._get_ve(i, input_ids, ve_cache)
-            x = self.blocks[i](x, x0,
-                self.qo_bank[i], self.kv_bank[i], self.kv_bank[n + i],
-                self.qo_bank[n + i], self.mlp_up_bank[i], self.mlp_down_bank[i],
-                v_embed=ve)
+            x = self._run_block(i, x, x0, input_ids, ve_cache)
             skips.append(x)
         for i in range(self.num_decoder_layers):
             bi = self.num_encoder_layers + i
             if skips:
                 x = x + self.skip_weights[i].to(dtype=x.dtype)[None, None, :] * skips.pop()
-            ve = self._get_ve(bi, input_ids, ve_cache)
-            x = self.blocks[bi](x, x0,
-                self.qo_bank[bi], self.kv_bank[bi], self.kv_bank[n + bi],
-                self.qo_bank[n + bi], self.mlp_up_bank[bi], self.mlp_down_bank[bi],
-                v_embed=ve)
+            x = self._run_block(bi, x, x0, input_ids, ve_cache)
         x = self.final_norm(x)
         x_flat = x.reshape(-1, x.size(-1))
         targets = target_ids.reshape(-1)
@@ -1016,7 +1027,6 @@ class GPT(nn.Module):
         return F.cross_entropy(logits.float(), targets, reduction="mean")
     def forward_logits(self, input_ids: Tensor) -> Tensor:
         """Return logits (bsz, seq_len, vocab) without computing loss."""
-        n = self.num_layers
         x = self.tok_emb(input_ids)
         if self.bigram is not None:
             x = x + self.bigram(input_ids)
@@ -1026,21 +1036,13 @@ class GPT(nn.Module):
         skips: list[Tensor] = []
         ve_cache: dict = {}
         for i in range(self.num_encoder_layers):
-            ve = self._get_ve(i, input_ids, ve_cache)
-            x = self.blocks[i](x, x0,
-                self.qo_bank[i], self.kv_bank[i], self.kv_bank[n + i],
-                self.qo_bank[n + i], self.mlp_up_bank[i], self.mlp_down_bank[i],
-                v_embed=ve)
+            x = self._run_block(i, x, x0, input_ids, ve_cache)
             skips.append(x)
         for i in range(self.num_decoder_layers):
             bi = self.num_encoder_layers + i
             if skips:
                 x = x + self.skip_weights[i].to(dtype=x.dtype)[None, None, :] * skips.pop()
-            ve = self._get_ve(bi, input_ids, ve_cache)
-            x = self.blocks[bi](x, x0,
-                self.qo_bank[bi], self.kv_bank[bi], self.kv_bank[n + bi],
-                self.qo_bank[n + bi], self.mlp_up_bank[bi], self.mlp_down_bank[bi],
-                v_embed=ve)
+            x = self._run_block(bi, x, x0, input_ids, ve_cache)
         x = self.final_norm(x)
         if self.tie_embeddings:
             logits_proj = F.linear(x, self.tok_emb.weight)
@@ -1636,6 +1638,8 @@ def main() -> None:
         bigram_vocab_size=args.bigram_vocab_size,
         bigram_dim=args.bigram_dim,
         xsa_last_n=args.xsa_last_n,
+        depth_recur_layers=args.depth_recur_layers,
+        depth_recur_repeats=args.depth_recur_repeats,
         rope_dims=args.rope_dims,
         ln_scale=args.ln_scale,
         ve_enabled=args.ve_enabled,
@@ -1734,6 +1738,10 @@ def main() -> None:
     log0(f"model_params:{sum(p.numel() for p in base_model.parameters())}")
     xsa_layers = [i for i, b in enumerate(base_model.blocks) if b.attn.use_xsa]
     log0(f"XSA:last_{args.xsa_last_n} active_layers:{xsa_layers}")
+    log0(
+        f"depth_recur:layers:{sorted(base_model.depth_recur_layers)} "
+        f"extra_repeats:{base_model.depth_recur_repeats}"
+    )
     log0(f"world_size:{world_size} grad_accum_steps:{grad_accum_steps}")
     log0("sdp_backends:cudnn=False flash=True mem_efficient=False math=False")
     log0(f"attention_mode:gqa num_heads:{args.num_heads} num_kv_heads:{args.num_kv_heads}")
@@ -1972,6 +1980,8 @@ def main() -> None:
         logit_softcap=args.logit_softcap, rope_base=args.rope_base, qk_gain_init=args.qk_gain_init,
         bigram_vocab_size=args.bigram_vocab_size, bigram_dim=args.bigram_dim,
         xsa_last_n=args.xsa_last_n,
+        depth_recur_layers=args.depth_recur_layers,
+        depth_recur_repeats=args.depth_recur_repeats,
         rope_dims=args.rope_dims, ln_scale=args.ln_scale,
         ve_enabled=args.ve_enabled, ve_dim=args.ve_dim, ve_layers=args.ve_layers,
         neg_slope=args.negative_slope,
